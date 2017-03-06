@@ -68,20 +68,19 @@ defmodule ThySupervisor do
   end
 
   def handle_call({:restart_child, old_pid}, _from, state) do
-    case Map.fetch(state, old_pid) do
-      {:ok, child_spec} ->
-        case restart_child(old_pid, child_spec) do
-          {:ok, {pid, child_spec}} ->
-            new_state =
-              state
-              |> Map.delete(old_pid)
-              |> Map.put(pid, child_spec)
-            {:reply, {:ok, pid}, new_state}
-          :error ->
-            {:reply, {:error, "error restarting child"}, state}
-        end
-        _ ->
-          {:reply, :ok, state}
+    with {:ok, child_spec} <- Map.fetch(state, old_pid),
+         {:ok, {pid, child_spec}} <- restart_child(old_pid, child_spec)
+    do
+      new_state =
+        state
+        |> Map.delete(old_pid)
+        |> Map.put(pid, child_spec)
+      {:reply, {:ok, pid}, new_state}
+    else
+      :error ->
+        {:reply, {:error, "error restarting child"}, state}
+      _ ->
+        {:reply, :ok, state}
     end
   end
 
@@ -93,10 +92,30 @@ defmodule ThySupervisor do
     {:reply, state, state}
   end
 
+  def handle_info({:EXIT, from, :normal}, state) do
+    new_state = state |> Map.delete(from)
+    {:noreply, new_state}
+  end
+
   def handle_info({:EXIT, from, :killed}, state) do
     new_state = state |> Map.delete(from)
     {:noreply, new_state}
   end
+
+  def handle_info({:EXIT, old_pid, _reason}, state) do
+    with {:ok, child_spec} <- Map.fetch(state, old_pid),
+         {:ok, {pid, child_spec}} <- restart_child(old_pid, child_spec)
+    do
+      new_state =
+        state
+        |> Map.delete(old_pid)
+        |> Map.put(pid, child_spec)
+      {:noreply, new_state}
+    else
+      :error -> {:noreply, state}
+    end
+  end
+
   #
   # Helper Functions
   #
