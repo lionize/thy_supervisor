@@ -29,6 +29,11 @@ defmodule ThySupervisor do
     GenServer.call(supervisor, :which_children)
   end
 
+  def terminate(_reason, state) do
+    terminate_children(state)
+    :ok
+  end
+
   #
   # Callback Functions
   #
@@ -126,5 +131,13 @@ defmodule ThySupervisor do
     with :ok <- terminate_child(pid),
          {:ok, new_pid} <- start_child(child_spec),
          do: {:ok, {new_pid, child_spec}}
+  end
+
+  defp terminate_children([]) do
+    :ok
+  end
+
+  defp terminate_children(child_specs) do
+    child_specs |> Enum.each(fn {pid, _} -> terminate_child(pid) end)
   end
 end
